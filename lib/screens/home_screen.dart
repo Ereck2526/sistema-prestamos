@@ -123,6 +123,70 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _showEditLoanModal(Map<String, dynamic> loan) {
+    final formKey = GlobalKey<FormState>();
+    final principalCtrl = TextEditingController(text: loan['original_principal'].toString());
+    final interestCtrl = TextEditingController(text: loan['interest_rate'].toString());
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Editar Préstamo'),
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: principalCtrl,
+                  decoration: const InputDecoration(labelText: 'Capital Inicial'),
+                  keyboardType: TextInputType.number,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) return 'Requerido';
+                    if (double.tryParse(value) == null) return 'Número inválido';
+                    return null;
+                  },
+                ),
+                TextFormField(
+                  controller: interestCtrl,
+                  decoration: const InputDecoration(labelText: 'Tasa de Interés (%)'),
+                  keyboardType: TextInputType.number,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) return 'Requerido';
+                    if (double.tryParse(value) == null) return 'Número inválido';
+                    return null;
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+            ElevatedButton(
+              onPressed: () async {
+                if (!formKey.currentState!.validate()) return;
+                Navigator.pop(context);
+                try {
+                  final db = context.read<DatabaseService>();
+                  await db.updateLoan(
+                    id: loan['id'],
+                    originalPrincipal: double.parse(principalCtrl.text),
+                    interestRate: double.parse(interestCtrl.text),
+                  );
+                  _fetchData();
+                } catch(e) {
+                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                }
+              },
+              child: const Text('Guardar'),
+            ),
+          ],
+        );
+      }
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -233,7 +297,16 @@ class _HomeScreenState extends State<HomeScreen> {
                                 leading: CircleAvatar(backgroundColor: statusColor, child: const Icon(Icons.person, color: Colors.white)),
                                 title: Text(client != null ? client['name'] : 'Desconocido', style: const TextStyle(fontWeight: FontWeight.bold)),
                                 subtitle: Text('Deuda: \$${remaining.toStringAsFixed(2)}\n$dateText'),
-                                trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(Icons.edit, color: Colors.blue),
+                                      onPressed: () => _showEditLoanModal(loan),
+                                    ),
+                                    const Icon(Icons.arrow_forward_ios, size: 16),
+                                  ],
+                                ),
                                 onTap: () {
                                   context.push('/loan/${loan['id']}', extra: loan).then((_) => _fetchData());
                                 },

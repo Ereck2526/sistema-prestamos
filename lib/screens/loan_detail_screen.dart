@@ -194,10 +194,12 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
                   itemCount: _ledger.length,
                   itemBuilder: (context, index) {
                     final p = _ledger[index];
+                    String cleanNotes = p.notes?.replaceAll('[PERIODO_COMPLETO]', '').trim() ?? '';
+                    String noteText = cleanNotes.isNotEmpty ? ' - $cleanNotes' : '';
                     return ListTile(
                       leading: const CircleAvatar(backgroundColor: Colors.green, child: Icon(Icons.arrow_downward, color: Colors.white)),
                       title: Text('Abonó Cap: \$${p.principalPaid} | Int: \$${p.interestPaid}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: Text('${p.paymentDate.day}/${p.paymentDate.month}/${p.paymentDate.year} ${p.notes != null ? ' - ${p.notes}' : ''}'),
+                      subtitle: Text('${p.paymentDate.day}/${p.paymentDate.month}/${p.paymentDate.year}$noteText'),
                       trailing: IconButton(
                         icon: const Icon(Icons.delete_outline, color: Colors.red),
                         tooltip: 'Eliminar Pago',

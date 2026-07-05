@@ -38,8 +38,6 @@ class _ClientsScreenState extends State<ClientsScreen> {
   void _showAddClientModal() {
     final formKey = GlobalKey<FormState>();
     final nameCtrl = TextEditingController();
-    final phoneCtrl = TextEditingController();
-    final aliasCtrl = TextEditingController();
 
     showDialog(
       context: context,
@@ -61,27 +59,6 @@ class _ClientsScreenState extends State<ClientsScreen> {
                     return null;
                   },
                 ),
-                TextFormField(
-                  controller: phoneCtrl, 
-                  decoration: const InputDecoration(labelText: 'Teléfono *'), 
-                  keyboardType: TextInputType.phone,
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Este campo es obligatorio';
-                    }
-                    if (!value.trim().startsWith('9')) {
-                      return 'Debe empezar con 9';
-                    }
-                    if (value.trim().length != 9 || int.tryParse(value.trim()) == null) {
-                      return 'Debe tener exactamente 9 dígitos';
-                    }
-                    return null;
-                  },
-                ),
-                TextFormField(
-                  controller: aliasCtrl, 
-                  decoration: const InputDecoration(labelText: 'Alias / Apodo (Opcional)'),
-                ),
               ],
             ),
           ),
@@ -96,8 +73,6 @@ class _ClientsScreenState extends State<ClientsScreen> {
                   final db = context.read<DatabaseService>();
                   await db.createClient(
                     name: nameCtrl.text.trim(),
-                    phone: phoneCtrl.text.trim(),
-                    alias: aliasCtrl.text.trim().isNotEmpty ? aliasCtrl.text.trim() : null,
                   );
                   _fetchClients();
                 } catch(e) {
@@ -115,8 +90,6 @@ class _ClientsScreenState extends State<ClientsScreen> {
   void _showEditClientModal(Client client) {
     final formKey = GlobalKey<FormState>();
     final nameCtrl = TextEditingController(text: client.name);
-    final phoneCtrl = TextEditingController(text: client.phone);
-    final aliasCtrl = TextEditingController(text: client.alias);
 
     showDialog(
       context: context,
@@ -136,21 +109,6 @@ class _ClientsScreenState extends State<ClientsScreen> {
                     return null;
                   },
                 ),
-                TextFormField(
-                  controller: phoneCtrl, 
-                  decoration: const InputDecoration(labelText: 'Teléfono *'), 
-                  keyboardType: TextInputType.phone,
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) return 'Este campo es obligatorio';
-                    if (!value.trim().startsWith('9')) return 'Debe empezar con 9';
-                    if (value.trim().length != 9 || int.tryParse(value.trim()) == null) return 'Debe tener exactamente 9 dígitos';
-                    return null;
-                  },
-                ),
-                TextFormField(
-                  controller: aliasCtrl, 
-                  decoration: const InputDecoration(labelText: 'Alias / Apodo (Opcional)'),
-                ),
               ],
             ),
           ),
@@ -165,8 +123,6 @@ class _ClientsScreenState extends State<ClientsScreen> {
                   await db.updateClient(
                     id: client.id,
                     name: nameCtrl.text.trim(),
-                    phone: phoneCtrl.text.trim(),
-                    alias: aliasCtrl.text.trim().isNotEmpty ? aliasCtrl.text.trim() : null,
                   );
                   _fetchClients();
                 } catch(e) {
@@ -229,7 +185,6 @@ class _ClientsScreenState extends State<ClientsScreen> {
               return ListTile(
                 leading: const CircleAvatar(child: Icon(Icons.person)),
                 title: Text(c.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text('${c.alias ?? 'Sin alias'} | ${c.phone ?? 'Sin teléfono'}'),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [

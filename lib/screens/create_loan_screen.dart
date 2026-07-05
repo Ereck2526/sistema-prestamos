@@ -110,11 +110,14 @@ class _CreateLoanScreenState extends State<CreateLoanScreen> {
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
                     value: _frequency,
-                    decoration: const InputDecoration(labelText: 'Frecuencia de Cobro'),
-                    items: ['Diario', 'Semanal', 'Mensual'].map((String value) {
-                      return DropdownMenuItem<String>(value: value, child: Text(value));
+                    decoration: const InputDecoration(labelText: 'Frecuencia de Pago'),
+                    items: ['Mensual', 'Quincenal', 'Semanal'].map((String value) {
+                      return DropdownMenuItem<String>(
+                        value: value,
+                        child: Text(value),
+                      );
                     }).toList(),
-                    onChanged: (newValue) => setState(() => _frequency = newValue!),
+                    onChanged: (val) => setState(() => _frequency = val!),
                   ),
                   const SizedBox(height: 32),
                   SizedBox(

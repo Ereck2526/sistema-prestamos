@@ -77,10 +77,10 @@ class DatabaseService {
     DateTime nextDate;
     if (paymentFrequency == 'Mensual') {
       nextDate = DateTime(now.year, now.month + 1, now.day);
-    } else if (paymentFrequency == 'Semanal') {
-      nextDate = now.add(const Duration(days: 7));
+    } else if (paymentFrequency == 'Quincenal') {
+      nextDate = now.add(const Duration(days: 15));
     } else {
-      nextDate = now.add(const Duration(days: 1));
+      nextDate = now.add(const Duration(days: 7));
     }
 
     await _supabase.from('loans').insert({
@@ -91,6 +91,17 @@ class DatabaseService {
       'next_payment_date': nextDate.toIso8601String().split('T')[0],
       'status': 'active'
     });
+  }
+
+  Future<void> updateLoan({
+    required String id,
+    required double originalPrincipal,
+    required double interestRate,
+  }) async {
+    await _supabase.from('loans').update({
+      'original_principal': originalPrincipal,
+      'interest_rate': interestRate,
+    }).eq('id', id);
   }
 
   // ==========================
@@ -111,36 +122,64 @@ class DatabaseService {
     required double interestPaid,
     String? notes,
   }) async {
+    final loan = await _supabase.from('loans').select('original_principal, interest_rate, payment_frequency, next_payment_date').eq('id', loanId).single();
+    double originalPrincipal = (loan['original_principal'] ?? 0).toDouble();
+    double interestRate = (loan['interest_rate'] ?? 0).toDouble();
+    double expectedInterest = (originalPrincipal * interestRate) / 100.0;
+
+    final allPayments = await _supabase.from('payments').select('interest_paid, notes').eq('loan_id', loanId).order('created_at', ascending: false);
+    
+    double accumulatedInterest = 0;
+    for (var p in allPayments) {
+      accumulatedInterest += (p['interest_paid'] ?? 0).toDouble();
+      if (p['notes'] != null && p['notes'].toString().contains('[PERIODO_COMPLETO]')) {
+        break;
+      }
+    }
+    
+    accumulatedInterest += interestPaid;
+    
+    int periodsToAdvance = 0;
+    if (expectedInterest > 0) {
+      periodsToAdvance = (accumulatedInterest / expectedInterest).floor();
+    } else if (interestPaid > 0) {
+      periodsToAdvance = 1;
+    }
+    
+    String finalNotes = notes ?? '';
+    if (periodsToAdvance > 0) {
+      finalNotes = finalNotes.isEmpty ? '[PERIODO_COMPLETO]' : '$finalNotes [PERIODO_COMPLETO]';
+    }
+    
     await _supabase.from('payments').insert({
       'loan_id': loanId,
       'principal_paid': principalPaid,
       'interest_paid': interestPaid,
-      'notes': notes,
+      'notes': finalNotes.isEmpty ? null : finalNotes,
     });
 
-    final allPayments = await _supabase.from('payments').select('principal_paid').eq('loan_id', loanId);
+    final allPaymentsAfterInsert = await _supabase.from('payments').select('principal_paid').eq('loan_id', loanId);
     double totalPrincipalPaid = 0;
-    for (var p in allPayments) {
+    for (var p in allPaymentsAfterInsert) {
       totalPrincipalPaid += (p['principal_paid'] ?? 0).toDouble();
     }
 
-    final loan = await _supabase.from('loans').select('original_principal, payment_frequency, next_payment_date').eq('id', loanId).single();
-    double originalPrincipal = (loan['original_principal'] ?? 0).toDouble();
-
     if (totalPrincipalPaid >= originalPrincipal) {
       await _supabase.from('loans').update({'status': 'paid'}).eq('id', loanId);
-    } else {
+    } else if (periodsToAdvance > 0) {
       String? currentNextStr = loan['next_payment_date'];
       String freq = loan['payment_frequency'];
       if (currentNextStr != null) {
         DateTime currentNext = DateTime.parse(currentNextStr);
-        DateTime newNext;
-        if (freq == 'Mensual') {
-          newNext = DateTime(currentNext.year, currentNext.month + 1, currentNext.day);
-        } else if (freq == 'Semanal') {
-          newNext = currentNext.add(const Duration(days: 7));
-        } else {
-          newNext = currentNext.add(const Duration(days: 1));
+        DateTime newNext = currentNext;
+        for (int i = 0; i < periodsToAdvance; i++) {
+          if (freq == 'Mensual') {
+            newNext = DateTime(newNext.year, newNext.month + 1, newNext.day);
+          } else if (freq == 'Quincenal') {
+            newNext = newNext.add(const Duration(days: 15));
+          } else {
+            newNext = newNext.add(const Duration(days: 7));
+          }
         }
         await _supabase.from('loans').update({'next_payment_date': newNext.toIso8601String().split('T')[0]}).eq('id', loanId);
       }
@@ -148,6 +187,10 @@ class DatabaseService {
   }
 
   Future<void> deletePayment(String paymentId, String loanId) async {
+    final paymentToDelete = await _supabase.from('payments').select('notes').eq('id', paymentId).single();
+    String notes = paymentToDelete['notes']?.toString() ?? '';
+    int periodsToRollback = '[PERIODO_COMPLETO]'.allMatches(notes).length;
+
     await _supabase.from('payments').delete().eq('id', paymentId);
     
     final allPayments = await _supabase.from('payments').select('principal_paid').eq('loan_id', loanId);
@@ -164,18 +207,20 @@ class DatabaseService {
       updates['status'] = 'active';
     }
     
-    if (loan['status'] == 'active') {
+    if (loan['status'] == 'active' && periodsToRollback > 0) {
       String? currentNextStr = loan['next_payment_date'];
       String freq = loan['payment_frequency'];
       if (currentNextStr != null) {
         DateTime currentNext = DateTime.parse(currentNextStr);
-        DateTime oldNext;
-        if (freq == 'Mensual') {
-          oldNext = DateTime(currentNext.year, currentNext.month - 1, currentNext.day);
-        } else if (freq == 'Semanal') {
-          oldNext = currentNext.subtract(const Duration(days: 7));
-        } else {
-          oldNext = currentNext.subtract(const Duration(days: 1));
+        DateTime oldNext = currentNext;
+        for (int i = 0; i < periodsToRollback; i++) {
+          if (freq == 'Mensual') {
+            oldNext = DateTime(oldNext.year, oldNext.month - 1, oldNext.day);
+          } else if (freq == 'Quincenal') {
+            oldNext = oldNext.subtract(const Duration(days: 15));
+          } else {
+            oldNext = oldNext.subtract(const Duration(days: 7));
+          }
         }
         updates['next_payment_date'] = oldNext.toIso8601String().split('T')[0];
       }
