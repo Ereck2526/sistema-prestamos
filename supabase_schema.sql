@@ -43,6 +43,7 @@ ALTER TABLE clients ENABLE ROW LEVEL SECURITY;
 ALTER TABLE loans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Allow authenticated full access to clients" ON clients FOR ALL USING (auth.role() = 'authenticated');
-CREATE POLICY "Allow authenticated full access to loans" ON loans FOR ALL USING (auth.role() = 'authenticated');
-CREATE POLICY "Allow authenticated full access to payments" ON payments FOR ALL USING (auth.role() = 'authenticated');
+-- NOTA: Reemplaza 'PEGA_AQUI_EL_UID' con el ID real del usuario desde Supabase -> Authentication -> Users.
+CREATE POLICY "Allow authenticated full access to clients" ON clients FOR ALL USING (auth.uid() = 'UID_DE_PREFERENCIA');
+CREATE POLICY "Allow authenticated full access to loans" ON loans FOR ALL USING (auth.uid() = 'UID_DE_PREFERENCIA');
+CREATE POLICY "Allow authenticated full access to payments" ON payments FOR ALL USING (auth.uid() = 'UID_DE_PREFERENCIA');
