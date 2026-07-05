@@ -16,7 +16,7 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Map<String, dynamic>> _activeLoans = [];
   double _totalLent = 0;
   double _totalInterest = 0;
-  bool _hasShownAlerts = false;
+  int _alertCount = 0;
 
   @override
   void initState() {
@@ -36,19 +36,25 @@ class _HomeScreenState extends State<HomeScreen> {
       
       final globalInterest = await db.fetchTotalGlobalInterest();
 
+      int alerts = 0;
+      DateTime now = DateTime.now();
+      DateTime today = DateTime(now.year, now.month, now.day);
+      for (var loan in loans) {
+        String? nextStr = loan['next_payment_date'];
+        if (nextStr == null) continue;
+        DateTime nextDate = DateTime.parse(nextStr);
+        if (nextDate.isBefore(today) || nextDate.isAtSameMomentAs(today)) {
+          alerts++;
+        }
+      }
+
       setState(() {
         _activeLoans = loans;
         _totalLent = lent;
         _totalInterest = globalInterest;
+        _alertCount = alerts;
         _isLoading = false;
       });
-
-      if (!_hasShownAlerts) {
-        _hasShownAlerts = true;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _checkNotifications(loans, auto: true);
-        });
-      }
     } catch (e) {
       setState(() => _isLoading = false);
       if(mounted){
@@ -57,7 +63,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _checkNotifications(List<Map<String, dynamic>> loans, {bool auto = false}) {
+  void _checkNotifications(List<Map<String, dynamic>> loans) {
     List<String> todayAlerts = [];
     List<String> overdueAlerts = [];
     DateTime now = DateTime.now();
@@ -78,7 +84,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     if (todayAlerts.isEmpty && overdueAlerts.isEmpty) {
-      if (!auto) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No hay alertas pendientes')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No hay alertas pendientes')));
       return;
     }
 
@@ -129,7 +135,11 @@ class _HomeScreenState extends State<HomeScreen> {
             onPressed: () => context.push('/paid-loans').then((_) => _fetchData()),
           ),
           IconButton(
-            icon: const Icon(Icons.notifications_active, color: Colors.amberAccent),
+            icon: Badge(
+              isLabelVisible: _alertCount > 0,
+              label: Text('$_alertCount'),
+              child: const Icon(Icons.notifications, color: Colors.amberAccent),
+            ),
             tooltip: 'Ver Alertas',
             onPressed: () => _checkNotifications(_activeLoans),
           ),

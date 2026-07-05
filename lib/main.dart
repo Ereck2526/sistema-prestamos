@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'services/auth_service.dart';
 import 'services/database_service.dart';
 import 'utils/app_router.dart';
+import 'widgets/app_lifecycle_overlay.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -44,6 +45,9 @@ class PrestamosApp extends StatelessWidget {
               ),
             ),
             routerConfig: appRouter,
+            builder: (context, child) {
+              return AppLifecycleOverlay(child: child!);
+            },
           );
         },
       ),
