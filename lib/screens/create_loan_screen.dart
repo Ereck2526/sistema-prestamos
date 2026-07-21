@@ -16,6 +16,7 @@ class _CreateLoanScreenState extends State<CreateLoanScreen> {
   final _amountController = TextEditingController();
   final _interestController = TextEditingController();
   String _frequency = 'Mensual';
+  DateTime _startDate = DateTime.now();
   Client? _selectedClient;
   List<Client> _clients = [];
   bool _isLoadingClients = true;
@@ -56,6 +57,7 @@ class _CreateLoanScreenState extends State<CreateLoanScreen> {
         originalPrincipal: double.parse(_amountController.text),
         interestRate: double.parse(_interestController.text),
         paymentFrequency: _frequency,
+        startDate: _startDate,
       );
 
       if (mounted) {
@@ -118,6 +120,23 @@ class _CreateLoanScreenState extends State<CreateLoanScreen> {
                       );
                     }).toList(),
                     onChanged: (val) => setState(() => _frequency = val!),
+                  ),
+                  const SizedBox(height: 16),
+                  ListTile(
+                    title: const Text('Fecha de Préstamo (Inicio)'),
+                    subtitle: Text('${_startDate.day}/${_startDate.month}/${_startDate.year}'),
+                    trailing: const Icon(Icons.calendar_today),
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: _startDate,
+                        firstDate: DateTime(2000),
+                        lastDate: DateTime(2100),
+                      );
+                      if (picked != null) {
+                        setState(() => _startDate = picked);
+                      }
+                    },
                   ),
                   const SizedBox(height: 32),
                   SizedBox(

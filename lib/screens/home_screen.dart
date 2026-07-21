@@ -17,6 +17,25 @@ class _HomeScreenState extends State<HomeScreen> {
   double _totalLent = 0;
   double _totalInterest = 0;
   int _alertCount = 0;
+  String? _selectedClientFilter; // null = todos
+
+  List<Map<String, dynamic>> get _filteredLoans {
+    if (_selectedClientFilter == null) return _activeLoans;
+    return _activeLoans.where((loan) {
+      final client = loan['client'];
+      return client != null && client['name'] == _selectedClientFilter;
+    }).toList();
+  }
+
+  List<String> get _clientNames {
+    final names = _activeLoans
+        .map((loan) => loan['client']?['name'] as String?)
+        .whereType<String>()
+        .toSet()
+        .toList();
+    names.sort();
+    return names;
+  }
 
   @override
   void initState() {
@@ -127,61 +146,132 @@ class _HomeScreenState extends State<HomeScreen> {
     final formKey = GlobalKey<FormState>();
     final principalCtrl = TextEditingController(text: loan['original_principal'].toString());
     final interestCtrl = TextEditingController(text: loan['interest_rate'].toString());
+    
+    DateTime startDate = loan['created_at'] != null ? DateTime.parse(loan['created_at']) : DateTime.now();
+    DateTime nextDate = loan['next_payment_date'] != null ? DateTime.parse(loan['next_payment_date']) : DateTime.now();
+    String selectedFrequency = loan['payment_frequency'] ?? 'Mensual';
+    final String originalFrequency = loan['payment_frequency'] ?? 'Mensual';
 
     showDialog(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: const Text('Editar Préstamo'),
-          content: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: principalCtrl,
-                  decoration: const InputDecoration(labelText: 'Capital Inicial'),
-                  keyboardType: TextInputType.number,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) return 'Requerido';
-                    if (double.tryParse(value) == null) return 'Número inválido';
-                    return null;
-                  },
+        return StatefulBuilder(
+          builder: (context, setStateModal) {
+            return AlertDialog(
+              title: const Text('Editar Préstamo'),
+              content: Form(
+                key: formKey,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextFormField(
+                        controller: principalCtrl,
+                        decoration: const InputDecoration(labelText: 'Capital Inicial'),
+                        keyboardType: TextInputType.number,
+                        validator: (value) {
+                          if (value == null || value.isEmpty) return 'Requerido';
+                          if (double.tryParse(value) == null) return 'Número inválido';
+                          return null;
+                        },
+                      ),
+                      TextFormField(
+                        controller: interestCtrl,
+                        decoration: const InputDecoration(labelText: 'Tasa de Interés (%)'),
+                        keyboardType: TextInputType.number,
+                        validator: (value) {
+                          if (value == null || value.isEmpty) return 'Requerido';
+                          if (double.tryParse(value) == null) return 'Número inválido';
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      InputDecorator(
+                        decoration: const InputDecoration(
+                          labelText: 'Frecuencia de Pago',
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: selectedFrequency,
+                            isDense: true,
+                            items: ['Mensual', 'Quincenal', 'Semanal'].map((String val) {
+                              return DropdownMenuItem<String>(value: val, child: Text(val));
+                            }).toList(),
+                            onChanged: (val) {
+                              if (val != null) setStateModal(() => selectedFrequency = val);
+                            },
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      ListTile(
+                        title: const Text('Fecha de Préstamo (Inicio)', style: TextStyle(fontSize: 14)),
+                        subtitle: Text('${startDate.day}/${startDate.month}/${startDate.year}'),
+                        trailing: const Icon(Icons.calendar_today, size: 20),
+                        contentPadding: EdgeInsets.zero,
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: startDate,
+                            firstDate: DateTime(2000),
+                            lastDate: DateTime(2100),
+                          );
+                          if (picked != null) {
+                            setStateModal(() => startDate = picked);
+                          }
+                        },
+                      ),
+                      ListTile(
+                        title: const Text('Fecha de Próximo Cobro', style: TextStyle(fontSize: 14)),
+                        subtitle: Text('${nextDate.day}/${nextDate.month}/${nextDate.year}'),
+                        trailing: const Icon(Icons.calendar_today, size: 20),
+                        contentPadding: EdgeInsets.zero,
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: nextDate,
+                            firstDate: DateTime(2000),
+                            lastDate: DateTime(2100),
+                          );
+                          if (picked != null) {
+                            setStateModal(() => nextDate = picked);
+                          }
+                        },
+                      ),
+                    ],
+                  ),
                 ),
-                TextFormField(
-                  controller: interestCtrl,
-                  decoration: const InputDecoration(labelText: 'Tasa de Interés (%)'),
-                  keyboardType: TextInputType.number,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) return 'Requerido';
-                    if (double.tryParse(value) == null) return 'Número inválido';
-                    return null;
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+                ElevatedButton(
+                  onPressed: () async {
+                    if (!formKey.currentState!.validate()) return;
+                    Navigator.pop(context);
+                    final scaffoldMessenger = ScaffoldMessenger.of(context);
+                    try {
+                      final db = context.read<DatabaseService>();
+                      final bool freqChanged = selectedFrequency != originalFrequency;
+                      await db.updateLoan(
+                        id: loan['id'],
+                        originalPrincipal: double.parse(principalCtrl.text),
+                        interestRate: double.parse(interestCtrl.text),
+                        startDate: startDate,
+                        nextDate: freqChanged ? null : nextDate,
+                        paymentFrequency: freqChanged ? selectedFrequency : null,
+                      );
+                      _fetchData();
+                    } catch(e) {
+                      scaffoldMessenger.showSnackBar(SnackBar(content: Text('Error: $e')));
+                    }
                   },
+                  child: const Text('Guardar'),
                 ),
               ],
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
-            ElevatedButton(
-              onPressed: () async {
-                if (!formKey.currentState!.validate()) return;
-                Navigator.pop(context);
-                try {
-                  final db = context.read<DatabaseService>();
-                  await db.updateLoan(
-                    id: loan['id'],
-                    originalPrincipal: double.parse(principalCtrl.text),
-                    interestRate: double.parse(interestCtrl.text),
-                  );
-                  _fetchData();
-                } catch(e) {
-                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
-                }
-              },
-              child: const Text('Guardar'),
-            ),
-          ],
+            );
+          }
         );
       }
     );
@@ -256,15 +346,43 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                 ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                  child: InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Filtrar por cliente',
+                      prefixIcon: Icon(Icons.filter_list),
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String?>(
+                        value: _selectedClientFilter,
+                        isDense: true,
+                        items: [
+                          const DropdownMenuItem<String?>(value: null, child: Text('Todos los clientes')),
+                          ..._clientNames.map((name) => DropdownMenuItem<String?>(value: name, child: Text(name))),
+                        ],
+                        onChanged: (val) => setState(() => _selectedClientFilter = val),
+                      ),
+                    ),
+                  ),
+                ),
                 Expanded(
-                  child: _activeLoans.isEmpty
-                      ? const Center(child: Text('No hay préstamos activos'))
+                  child: _filteredLoans.isEmpty
+                      ? Center(
+                          child: Text(
+                            _selectedClientFilter != null
+                                ? 'No hay préstamos para este cliente'
+                                : 'No hay préstamos activos',
+                          ),
+                        )
                       : ListView.builder(
-                          itemCount: _activeLoans.length,
+                          itemCount: _filteredLoans.length,
                           itemBuilder: (context, index) {
-                            final loan = _activeLoans[index];
+                            final loan = _filteredLoans[index];
                             final client = loan['client'];
-                            
+
                             double original = (loan['original_principal'] ?? 0).toDouble();
                             double paid = 0;
                             if (loan['payments'] != null) {
@@ -273,7 +391,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               }
                             }
                             double remaining = original - paid;
-                            
+
                             String? nextStr = loan['next_payment_date'];
                             Color statusColor = Colors.grey;
                             String dateText = 'Sin fecha';
@@ -326,3 +444,4 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
+
