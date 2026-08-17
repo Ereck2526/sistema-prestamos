@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../services/database_service.dart';
 import '../services/auth_service.dart';
+import '../widgets/app_drawer.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -284,11 +285,6 @@ class _HomeScreenState extends State<HomeScreen> {
         title: const Text('Panel Principal'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.archive),
-            tooltip: 'Archivo (Pagados)',
-            onPressed: () => context.push('/paid-loans').then((_) => _fetchData()),
-          ),
-          IconButton(
             icon: Badge(
               isLabelVisible: _alertCount > 0,
               label: Text('$_alertCount'),
@@ -298,15 +294,15 @@ class _HomeScreenState extends State<HomeScreen> {
             onPressed: () => _checkNotifications(_activeLoans),
           ),
           IconButton(
-            icon: const Icon(Icons.people),
-            tooltip: 'Directorio de Clientes',
-            onPressed: () => context.push('/clients'),
-          ),
-          IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () => context.read<AuthService>().signOut(),
           )
         ],
+      ),
+      drawer: AppDrawer(
+        currentRoute: '/home',
+        alertCount: _alertCount,
+        onNotificationsTap: () => _checkNotifications(_activeLoans),
       ),
       body: _isLoading 
         ? const Center(child: CircularProgressIndicator())
@@ -321,27 +317,13 @@ class _HomeScreenState extends State<HomeScreen> {
                     color: Colors.blue.shade50,
                     border: Border(bottom: BorderSide(color: Colors.blue.shade100)),
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  child: Column(
                     children: [
-                      Column(
-                        children: [
-                          const Text('Capital Prestado', style: TextStyle(fontSize: 14, color: Colors.blueGrey)),
-                          const SizedBox(height: 4),
-                          Text('\$${_totalLent.toStringAsFixed(2)}', 
-                            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.blue)
-                          ),
-                        ],
-                      ),
-                      Container(width: 1, height: 40, color: Colors.blue.shade200),
-                      Column(
-                        children: [
-                          const Text('Interés Generado', style: TextStyle(fontSize: 14, color: Colors.blueGrey)),
-                          const SizedBox(height: 4),
-                          Text('\$${_totalInterest.toStringAsFixed(2)}', 
-                            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.green)
-                          ),
-                        ],
+                      const Text('Capital Prestado', style: TextStyle(fontSize: 14, color: Colors.blueGrey)),
+                      const SizedBox(height: 4),
+                      Text(
+                        'S/. ${_totalLent.toStringAsFixed(2)}',
+                        style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.blue),
                       ),
                     ],
                   ),
@@ -373,73 +355,83 @@ class _HomeScreenState extends State<HomeScreen> {
                       ? Center(
                           child: Text(
                             _selectedClientFilter != null
-                                ? 'No hay préstamos para este cliente'
-                                : 'No hay préstamos activos',
+                                ? 'No hay prestamos para este cliente'
+                                : 'No hay prestamos activos',
                           ),
                         )
-                      : ListView.builder(
-                          itemCount: _filteredLoans.length,
-                          itemBuilder: (context, index) {
-                            final loan = _filteredLoans[index];
-                            final client = loan['client'];
+                      : ShaderMask(
+                          shaderCallback: (bounds) => LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [Colors.white, Colors.white, Colors.transparent],
+                            stops: const [0.0, 0.75, 1.0],
+                          ).createShader(bounds),
+                          blendMode: BlendMode.dstIn,
+                          child: ListView.builder(
+                            padding: const EdgeInsets.only(bottom: 80),
+                            itemCount: _filteredLoans.length,
+                            itemBuilder: (context, index) {
+                              final loan = _filteredLoans[index];
+                              final client = loan['client'];
 
-                            double original = (loan['original_principal'] ?? 0).toDouble();
-                            double paid = 0;
-                            if (loan['payments'] != null) {
-                              for (var p in loan['payments']) {
-                                paid += (p['principal_paid'] ?? 0).toDouble();
+                              double original = (loan['original_principal'] ?? 0).toDouble();
+                              double paid = 0;
+                              if (loan['payments'] != null) {
+                                for (var p in loan['payments']) {
+                                  paid += (p['principal_paid'] ?? 0).toDouble();
+                                }
                               }
-                            }
-                            double remaining = original - paid;
+                              double remaining = original - paid;
 
-                            String? nextStr = loan['next_payment_date'];
-                            Color statusColor = Colors.grey;
-                            String dateText = 'Sin fecha';
-                            if (nextStr != null) {
-                              DateTime nextDate = DateTime.parse(nextStr);
-                              DateTime now = DateTime.now();
-                              DateTime today = DateTime(now.year, now.month, now.day);
-                              dateText = 'Cobro: ${nextDate.day}/${nextDate.month}/${nextDate.year}';
-                              if (nextDate.isBefore(today)) {
-                                statusColor = Colors.red;
-                              } else if (nextDate.isAtSameMomentAs(today)) {
-                                statusColor = Colors.orange;
-                              } else {
-                                statusColor = Colors.green;
+                              String? nextStr = loan['next_payment_date'];
+                              Color statusColor = Colors.grey;
+                              String dateText = 'Sin fecha';
+                              if (nextStr != null) {
+                                DateTime nextDate = DateTime.parse(nextStr);
+                                DateTime now = DateTime.now();
+                                DateTime today = DateTime(now.year, now.month, now.day);
+                                dateText = 'Cobro: ${nextDate.day}/${nextDate.month}/${nextDate.year}';
+                                if (nextDate.isBefore(today)) {
+                                  statusColor = Colors.red;
+                                } else if (nextDate.isAtSameMomentAs(today)) {
+                                  statusColor = Colors.orange;
+                                } else {
+                                  statusColor = Colors.green;
+                                }
                               }
-                            }
 
-                            return Card(
-                              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              child: ListTile(
-                                leading: CircleAvatar(backgroundColor: statusColor, child: const Icon(Icons.person, color: Colors.white)),
-                                title: Text(client != null ? client['name'] : 'Desconocido', style: const TextStyle(fontWeight: FontWeight.bold)),
-                                subtitle: Text('Deuda: \$${remaining.toStringAsFixed(2)}\n$dateText'),
-                                trailing: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    IconButton(
-                                      icon: const Icon(Icons.edit, color: Colors.blue),
-                                      onPressed: () => _showEditLoanModal(loan),
-                                    ),
-                                    const Icon(Icons.arrow_forward_ios, size: 16),
-                                  ],
+                              return Card(
+                                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                child: ListTile(
+                                  leading: CircleAvatar(backgroundColor: statusColor, child: const Icon(Icons.person, color: Colors.white)),
+                                  title: Text(client != null ? client['name'] : 'Desconocido', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                  subtitle: Text('Deuda: S/. ${remaining.toStringAsFixed(2)}\n$dateText'),
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(Icons.edit, color: Colors.blue),
+                                        onPressed: () => _showEditLoanModal(loan),
+                                      ),
+                                      const Icon(Icons.arrow_forward_ios, size: 16),
+                                    ],
+                                  ),
+                                  onTap: () {
+                                    context.push('/loan/${loan['id']}', extra: loan).then((_) => _fetchData());
+                                  },
                                 ),
-                                onTap: () {
-                                  context.push('/loan/${loan['id']}', extra: loan).then((_) => _fetchData());
-                                },
-                              ),
-                            );
-                          },
+                              );
+                            },
+                          ),
                         ),
                 ),
               ],
             ),
           ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: FloatingActionButton(
         onPressed: () => context.push('/create-loan').then((_) => _fetchData()),
-        icon: const Icon(Icons.add),
-        label: const Text('Nuevo Préstamo'),
+        tooltip: 'Nuevo Prestamo',
+        child: const Icon(Icons.add),
       ),
     );
   }

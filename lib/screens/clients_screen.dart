@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/database_service.dart';
+import '../services/auth_service.dart';
 import '../models/client_model.dart';
+import '../widgets/app_drawer.dart';
 
 class ClientsScreen extends StatefulWidget {
   const ClientsScreen({super.key});
@@ -173,9 +175,14 @@ class _ClientsScreenState extends State<ClientsScreen> {
       appBar: AppBar(
         title: const Text('Directorio de Clientes'),
         actions: [
-          IconButton(icon: const Icon(Icons.add), onPressed: _showAddClientModal)
+          IconButton(icon: const Icon(Icons.add), onPressed: _showAddClientModal),
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () => context.read<AuthService>().signOut(),
+          ),
         ],
       ),
+      drawer: const AppDrawer(currentRoute: '/clients'),
       body: _isLoading 
         ? const Center(child: CircularProgressIndicator())
         : ListView.builder(

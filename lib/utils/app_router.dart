@@ -7,6 +7,7 @@ import '../screens/clients_screen.dart';
 import '../screens/create_loan_screen.dart';
 import '../screens/loan_detail_screen.dart';
 import '../screens/paid_loans_screen.dart';
+import '../screens/reports_screen.dart';
 
 class AppRouter {
   final AuthService authService;
@@ -55,7 +56,11 @@ class AppRouter {
       GoRoute(
         path: '/paid-loans',
         builder: (context, state) => const PaidLoansScreen(),
-      )
+      ),
+      GoRoute(
+        path: '/reports',
+        builder: (context, state) => const ReportsScreen(),
+      ),
     ],
   );
 }

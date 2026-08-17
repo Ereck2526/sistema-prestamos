@@ -57,6 +57,42 @@ class DatabaseService {
     return total;
   }
 
+  /// Devuelve el interés cobrado agrupado por mes/año.
+  /// Resultado: lista de mapas {'year': int, 'month': int, 'total': double}
+  Future<List<Map<String, dynamic>>> fetchMonthlyInterest() async {
+    final response = await _supabase
+        .from('payments')
+        .select('interest_paid, payment_date')
+        .order('payment_date', ascending: false);
+
+    final Map<String, double> grouped = {};
+    for (var p in response) {
+      final double interest = (p['interest_paid'] ?? 0).toDouble();
+      if (interest <= 0) continue;
+      final DateTime date = DateTime.parse(p['payment_date']);
+      final String key = '${date.year}-${date.month.toString().padLeft(2, '0')}';
+      grouped[key] = (grouped[key] ?? 0) + interest;
+    }
+
+    final List<Map<String, dynamic>> result = grouped.entries.map((e) {
+      final parts = e.key.split('-');
+      return {
+        'year': int.parse(parts[0]),
+        'month': int.parse(parts[1]),
+        'total': e.value,
+      };
+    }).toList();
+
+    result.sort((a, b) {
+      final aDate = DateTime(a['year'] as int, a['month'] as int);
+      final bDate = DateTime(b['year'] as int, b['month'] as int);
+      return bDate.compareTo(aDate);
+    });
+
+    return result;
+  }
+
+
   Future<List<Map<String, dynamic>>> fetchPaidLoansWithDetails() async {
     final response = await _supabase
         .from('loans')

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../services/database_service.dart';
+import '../services/auth_service.dart';
+import '../widgets/app_drawer.dart';
 
 class PaidLoansScreen extends StatefulWidget {
   const PaidLoansScreen({super.key});
@@ -51,8 +53,15 @@ class _PaidLoansScreenState extends State<PaidLoansScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Archivo de Préstamos Pagados'),
+        title: const Text('Archivo de Prestamos Pagados'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () => context.read<AuthService>().signOut(),
+          ),
+        ],
       ),
+      drawer: const AppDrawer(currentRoute: '/paid-loans'),
       body: _isLoading 
         ? const Center(child: CircularProgressIndicator())
         : Column(
