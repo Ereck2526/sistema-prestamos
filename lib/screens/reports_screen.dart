@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/database_service.dart';
 import '../services/auth_service.dart';
@@ -107,9 +107,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
                               final int month = item['month'] as int;
                               final int year = item['year'] as int;
                               final double total = item['total'] as double;
+                              final List<dynamic> payments = item['payments'] ?? [];
+                              
                               return Card(
                                 margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                                child: ListTile(
+                                child: ExpansionTile(
                                   leading: CircleAvatar(
                                     backgroundColor: Colors.green.shade100,
                                     child: const Icon(Icons.calendar_month, color: Colors.green),
@@ -126,6 +128,22 @@ class _ReportsScreenState extends State<ReportsScreen> {
                                       color: Colors.green,
                                     ),
                                   ),
+                                  children: payments.map((p) {
+                                    final DateTime date = p['date'];
+                                    final double amount = p['amount'];
+                                    final String clientName = p['clientName'];
+                                    
+                                    return ListTile(
+                                      dense: true,
+                                      leading: const Icon(Icons.monetization_on, color: Colors.grey, size: 20),
+                                      title: Text(clientName, style: const TextStyle(fontWeight: FontWeight.w600)),
+                                      subtitle: Text('${date.day}/${date.month}/${date.year}'),
+                                      trailing: Text(
+                                        'S/. ${amount.toStringAsFixed(2)}',
+                                        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blueGrey),
+                                      ),
+                                    );
+                                  }).toList(),
                                 ),
                               );
                             },

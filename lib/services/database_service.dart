@@ -57,31 +57,46 @@ class DatabaseService {
     return total;
   }
 
-  /// Devuelve el interés cobrado agrupado por mes/año.
-  /// Resultado: lista de mapas {'year': int, 'month': int, 'total': double}
+  /// Devuelve el interés cobrado agrupado por mes/año, incluyendo los detalles de cada pago.
+  /// Resultado: lista de mapas {'year': int, 'month': int, 'total': double, 'payments': List}
   Future<List<Map<String, dynamic>>> fetchMonthlyInterest() async {
     final response = await _supabase
         .from('payments')
-        .select('interest_paid, payment_date')
+        .select('interest_paid, payment_date, loan:loans(client:clients(name))')
         .order('payment_date', ascending: false);
 
-    final Map<String, double> grouped = {};
+    // Agrupar por llave 'YYYY-MM'
+    final Map<String, Map<String, dynamic>> grouped = {};
     for (var p in response) {
       final double interest = (p['interest_paid'] ?? 0).toDouble();
       if (interest <= 0) continue;
+      
       final DateTime date = DateTime.parse(p['payment_date']);
       final String key = '${date.year}-${date.month.toString().padLeft(2, '0')}';
-      grouped[key] = (grouped[key] ?? 0) + interest;
+      
+      String clientName = 'Desconocido';
+      if (p['loan'] != null && p['loan']['client'] != null) {
+        clientName = p['loan']['client']['name'] ?? 'Desconocido';
+      }
+
+      if (!grouped.containsKey(key)) {
+        grouped[key] = {
+          'year': date.year,
+          'month': date.month,
+          'total': 0.0,
+          'payments': [],
+        };
+      }
+      
+      grouped[key]!['total'] += interest;
+      grouped[key]!['payments'].add({
+        'date': date,
+        'amount': interest,
+        'clientName': clientName,
+      });
     }
 
-    final List<Map<String, dynamic>> result = grouped.entries.map((e) {
-      final parts = e.key.split('-');
-      return {
-        'year': int.parse(parts[0]),
-        'month': int.parse(parts[1]),
-        'total': e.value,
-      };
-    }).toList();
+    final List<Map<String, dynamic>> result = grouped.values.toList();
 
     result.sort((a, b) {
       final aDate = DateTime(a['year'] as int, a['month'] as int);
