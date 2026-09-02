@@ -50,7 +50,8 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
 
   void _showRegisterPaymentModal() {
     final principalController = TextEditingController(text: '0');
-    double suggestedInterest = _remainingPrincipal * (_interestRate / 100);
+    // FIX #5: El interes se calcula siempre sobre el capital ORIGINAL, no el restante
+    double suggestedInterest = _originalPrincipal * (_interestRate / 100);
     final interestController = TextEditingController(text: suggestedInterest.toStringAsFixed(2));
     final notesController = TextEditingController();
     DateTime paymentDate = DateTime.now();
