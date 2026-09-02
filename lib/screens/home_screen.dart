@@ -51,7 +51,15 @@ class _HomeScreenState extends State<HomeScreen> {
       final loans = await db.fetchActiveLoansWithDetails();
       double lent = 0;
       for (var loan in loans) {
-        lent += (loan['original_principal'] ?? 0).toDouble();
+        double original = (loan['original_principal'] ?? 0).toDouble();
+        double capitalAbonado = 0;
+        if (loan['payments'] != null) {
+          for (var p in loan['payments']) {
+            capitalAbonado += (p['principal_paid'] ?? 0).toDouble();
+          }
+        }
+        // Solo contar el capital que aun esta pendiente de cobrar
+        lent += (original - capitalAbonado).clamp(0.0, double.infinity);
       }
       
       final globalInterest = await db.fetchTotalGlobalInterest();

@@ -1,4 +1,4 @@
-﻿import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/client_model.dart';
 import '../models/loan_model.dart';
 import '../models/payment_model.dart';
@@ -98,7 +98,7 @@ class DatabaseService {
   Future<List<Map<String, dynamic>>> fetchMonthlyInterest() async {
     final response = await _supabase
         .from('payments')
-        .select('interest_paid, payment_date, loan:loans(client:clients(name))')
+        .select('interest_paid, payment_date, period_date, loan:loans(client:clients(name))')
         .order('payment_date', ascending: false);
 
     final Map<String, Map<String, dynamic>> grouped = {};
@@ -106,7 +106,11 @@ class DatabaseService {
       final double interest = (p['interest_paid'] ?? 0).toDouble();
       if (interest <= 0) continue;
 
-      final DateTime date = _normalizeDate(DateTime.parse(p['payment_date']));
+      // FIX #2: Usar period_date si existe (pagos nuevos), si no usar payment_date (pagos antiguos).
+      // Esto garantiza que pagos tardios se clasifiquen en el mes al que pertenecen,
+      // no en el mes en que fisicamente se pagaron.
+      final String rawDateStr = (p['period_date'] ?? p['payment_date']) as String;
+      final DateTime date = _normalizeDate(DateTime.parse(rawDateStr));
       final String key = '${date.year}-${date.month.toString().padLeft(2, '0')}';
 
       String clientName = 'Desconocido';
@@ -294,6 +298,9 @@ class DatabaseService {
       'principal_paid': principalPaid,
       'interest_paid': interestPaid,
       'notes': finalNotes.isEmpty ? null : finalNotes,
+      // FIX #2: Guardar el periodo al que pertenece este pago (fecha de vencimiento antes de avanzar).
+      // Si el cliente paga tarde, el pago igual queda clasificado en el mes correcto.
+      if (loan['next_payment_date'] != null) 'period_date': loan['next_payment_date'],
     };
     if (paymentDate != null) insertData['payment_date'] = paymentDate.toIso8601String();
 
