@@ -1,6 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/client_model.dart';
-import '../models/loan_model.dart';
 import '../models/payment_model.dart';
 
 class DatabaseService {

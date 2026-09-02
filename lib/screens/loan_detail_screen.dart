@@ -119,6 +119,8 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
                     }
 
                     Navigator.pop(dialogContext);
+                    // Capturar messenger antes del async gap
+                    final messenger = ScaffoldMessenger.of(context);
                     try {
                       final db = context.read<DatabaseService>();
                       await db.registerPayment(
@@ -129,9 +131,9 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
                         paymentDate: paymentDate,
                       );
                       _fetchLedger();
-                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pago guardado')));
+                      messenger.showSnackBar(const SnackBar(content: Text('Pago guardado')));
                     } catch(e) {
-                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                      messenger.showSnackBar(SnackBar(content: Text('Error: $e')));
                     }
                   }, 
                   child: const Text('Guardar Pago')

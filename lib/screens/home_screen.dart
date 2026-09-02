@@ -16,7 +16,6 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isLoading = true;
   List<Map<String, dynamic>> _activeLoans = [];
   double _totalLent = 0;
-  double _totalInterest = 0;
   int _alertCount = 0;
   String? _selectedClientFilter; // null = todos
 
@@ -62,7 +61,6 @@ class _HomeScreenState extends State<HomeScreen> {
         lent += (original - capitalAbonado).clamp(0.0, double.infinity);
       }
       
-      final globalInterest = await db.fetchTotalGlobalInterest();
 
       int alerts = 0;
       DateTime now = DateTime.now();
@@ -79,7 +77,6 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         _activeLoans = loans;
         _totalLent = lent;
-        _totalInterest = globalInterest;
         _alertCount = alerts;
         _isLoading = false;
       });

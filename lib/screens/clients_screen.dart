@@ -43,7 +43,7 @@ class _ClientsScreenState extends State<ClientsScreen> {
 
     showDialog(
       context: context,
-      builder: (context) {
+      builder: (dCtx) {
         return AlertDialog(
           title: const Text('Nuevo Cliente'),
           content: Form(
@@ -65,20 +65,19 @@ class _ClientsScreenState extends State<ClientsScreen> {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+            TextButton(onPressed: () => Navigator.pop(dCtx), child: const Text('Cancelar')),
             ElevatedButton(
               onPressed: () async {
                 if (!formKey.currentState!.validate()) return;
-
-                Navigator.pop(context);
+                Navigator.pop(dCtx);
+                // Capturar messenger del State (context externo) antes del async gap
+                final messenger = ScaffoldMessenger.of(context);
+                final db = context.read<DatabaseService>();
                 try {
-                  final db = context.read<DatabaseService>();
-                  await db.createClient(
-                    name: nameCtrl.text.trim(),
-                  );
+                  await db.createClient(name: nameCtrl.text.trim());
                   _fetchClients();
                 } catch(e) {
-                  if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                  messenger.showSnackBar(SnackBar(content: Text('Error: $e')));
                 }
               }, 
               child: const Text('Guardar')
@@ -95,7 +94,7 @@ class _ClientsScreenState extends State<ClientsScreen> {
 
     showDialog(
       context: context,
-      builder: (context) {
+      builder: (dCtx) {
         return AlertDialog(
           title: const Text('Editar Cliente'),
           content: Form(
@@ -115,20 +114,18 @@ class _ClientsScreenState extends State<ClientsScreen> {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+            TextButton(onPressed: () => Navigator.pop(dCtx), child: const Text('Cancelar')),
             ElevatedButton(
               onPressed: () async {
                 if (!formKey.currentState!.validate()) return;
-                Navigator.pop(context);
+                Navigator.pop(dCtx);
+                final messenger = ScaffoldMessenger.of(context);
+                final db = context.read<DatabaseService>();
                 try {
-                  final db = context.read<DatabaseService>();
-                  await db.updateClient(
-                    id: client.id,
-                    name: nameCtrl.text.trim(),
-                  );
+                  await db.updateClient(id: client.id, name: nameCtrl.text.trim());
                   _fetchClients();
                 } catch(e) {
-                  if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                  messenger.showSnackBar(SnackBar(content: Text('Error: $e')));
                 }
               }, 
               child: const Text('Actualizar')
@@ -142,23 +139,24 @@ class _ClientsScreenState extends State<ClientsScreen> {
   void _confirmDeleteClient(Client client) {
     showDialog(
       context: context,
-      builder: (context) {
+      builder: (dCtx) {
         return AlertDialog(
           title: const Text('Eliminar Cliente', style: TextStyle(color: Colors.red)),
           content: Text('¿Estás SEGURO de que deseas eliminar a ${client.name}? Esta acción borrará TODO su historial, sus préstamos y sus pagos de forma permanente. No se puede deshacer.'),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+            TextButton(onPressed: () => Navigator.pop(dCtx), child: const Text('Cancelar')),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
               onPressed: () async {
-                Navigator.pop(context);
+                Navigator.pop(dCtx);
+                final messenger = ScaffoldMessenger.of(context);
+                final db = context.read<DatabaseService>();
                 try {
-                  final db = context.read<DatabaseService>();
                   await db.deleteClient(client.id);
                   _fetchClients();
-                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cliente eliminado exitosamente')));
+                  messenger.showSnackBar(const SnackBar(content: Text('Cliente eliminado exitosamente')));
                 } catch(e) {
-                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error al eliminar: $e')));
+                  messenger.showSnackBar(SnackBar(content: Text('Error al eliminar: $e')));
                 }
               }, 
               child: const Text('Sí, Eliminar Todo')

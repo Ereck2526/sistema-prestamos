@@ -1,5 +1,4 @@
-import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
+﻿import 'package:go_router/go_router.dart';
 import '../services/auth_service.dart';
 import '../screens/login_screen.dart';
 import '../screens/home_screen.dart';
@@ -16,7 +15,7 @@ class AppRouter {
 
   late final router = GoRouter(
     initialLocation: '/home',
-    refreshListenable: authService, // Refresca las rutas si el usuario inicia/cierra sesión
+    refreshListenable: authService, // Refresca las rutas si el usuario inicia/cierra sesiÃ³n
     redirect: (context, state) {
       final isAuthenticated = authService.isAuthenticated;
       final isGoingToLogin = state.uri.toString() == '/login';
