@@ -177,7 +177,9 @@ class DatabaseService {
       'interest_rate': interestRate,
       'payment_frequency': paymentFrequency,
       'next_payment_date': nextDate.toIso8601String().split('T')[0],
-      'created_at': base.toIso8601String(),
+      // BUG C FIX: Guardar en UTC explícitamente para evitar que Supabase
+      // interprete la fecha local como UTC y desplace el dia ancla en zonas UTC-X
+      'created_at': base.toUtc().toIso8601String(),
       'status': 'active',
     });
   }
@@ -197,7 +199,8 @@ class DatabaseService {
 
     if (startDate != null) {
       final DateTime base = _normalizeDate(startDate);
-      updates['created_at'] = base.toIso8601String();
+      // BUG C FIX: Guardar en UTC para coherencia con createLoan
+      updates['created_at'] = base.toUtc().toIso8601String();
     }
 
     if (paymentFrequency != null) {
@@ -314,7 +317,11 @@ class DatabaseService {
       totalPrincipalPaid += (p['principal_paid'] ?? 0).toDouble();
     }
 
-    if (totalPrincipalPaid >= originalPrincipal) {
+    // BUG A FIX: Usar epsilon para evitar falsos negativos por precision de punto flotante.
+    // Ej: totalPrincipalPaid=999.9999 con originalPrincipal=1000 causaba que el prestamo
+    // nunca se marcara como 'paid' aunque la deuda fuera efectivamente cero.
+    const double epsilonPrincipal = 0.01; // tolerancia de 1 centavo
+    if (totalPrincipalPaid + epsilonPrincipal >= originalPrincipal) {
       await _supabase.from('loans').update({'status': 'paid'}).eq('id', loanId);
     } else if (periodsToAdvance > 0) {
       String freq = loan['payment_frequency'];
@@ -329,10 +336,14 @@ class DatabaseService {
         totalCompletedPeriods += '[PERIODO_COMPLETO]'.allMatches(n).length;
       }
 
-      // FIX #2: Avanzar exactamente totalCompletedPeriods veces (eliminar el +1 extra)
-      // FIX dia-31: Usar _addOneMonthSafe para respetar el dia ancla en meses cortos
+      // BUG B FIX: Restaurar el +1 al loop. El error original que llevo a removerlo era
+      // causado por el Bug #3 (break despues en vez de antes del acumulador), que inflaba
+      // periodsToAdvance. Con el Bug #3 corregido, el loop DEBE avanzar
+      // totalCompletedPeriods+1 veces desde created_at para llegar al SIGUIENTE periodo
+      // pendiente (no al que acaba de pagarse).
+      // Ejemplo: created=Aug2, periodo1 pagado → loop 2 veces → Oct2 (siguiente correcto)
       DateTime newNext = createdAt;
-      for (int i = 0; i < totalCompletedPeriods; i++) {
+      for (int i = 0; i < totalCompletedPeriods + 1; i++) {
         if (freq == 'Mensual') {
           newNext = _addOneMonthSafe(newNext, anchorDay);
         } else if (freq == 'Quincenal') {
