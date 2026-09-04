@@ -325,36 +325,31 @@ class DatabaseService {
       await _supabase.from('loans').update({'status': 'paid'}).eq('id', loanId);
     } else if (periodsToAdvance > 0) {
       String freq = loan['payment_frequency'];
-      // FIX #1 / TZ: Normalizar created_at para obtener el dia ancla correcto
+      // Obtener anchorDay desde created_at para respetar el dia 31
       final DateTime createdAt = _normalizeDate(DateTime.parse(loan['created_at']));
       final int anchorDay = createdAt.day;
 
-      // Contar total de periodos completados: los de este pago + los historicos
-      int totalCompletedPeriods = periodsToAdvance;
-      for (var p in allPayments) {
-        final String n = p['notes']?.toString() ?? '';
-        totalCompletedPeriods += '[PERIODO_COMPLETO]'.allMatches(n).length;
-      }
-
-      // BUG B FIX: Restaurar el +1 al loop. El error original que llevo a removerlo era
-      // causado por el Bug #3 (break despues en vez de antes del acumulador), que inflaba
-      // periodsToAdvance. Con el Bug #3 corregido, el loop DEBE avanzar
-      // totalCompletedPeriods+1 veces desde created_at para llegar al SIGUIENTE periodo
-      // pendiente (no al que acaba de pagarse).
-      // Ejemplo: created=Aug2, periodo1 pagado → loop 2 veces → Oct2 (siguiente correcto)
-      DateTime newNext = createdAt;
-      for (int i = 0; i < totalCompletedPeriods + 1; i++) {
-        if (freq == 'Mensual') {
-          newNext = _addOneMonthSafe(newNext, anchorDay);
-        } else if (freq == 'Quincenal') {
-          newNext = newNext.add(const Duration(days: 15));
-        } else {
-          newNext = newNext.add(const Duration(days: 7));
+      // ENFOQUE SIMPLIFICADO: avanzar desde next_payment_date actual por
+      // exactamente periodsToAdvance periodos.
+      // Esto es robusto porque no depende del historial de tags [PERIODO_COMPLETO]
+      // ni de recontar desde created_at. Cualquier error previo en la fecha
+      // se contiene en lugar de acumularse.
+      final String? currentNextStr = loan['next_payment_date'];
+      if (currentNextStr != null) {
+        DateTime newNext = DateTime.parse(currentNextStr);
+        for (int i = 0; i < periodsToAdvance; i++) {
+          if (freq == 'Mensual') {
+            newNext = _addOneMonthSafe(newNext, anchorDay);
+          } else if (freq == 'Quincenal') {
+            newNext = newNext.add(const Duration(days: 15));
+          } else {
+            newNext = newNext.add(const Duration(days: 7));
+          }
         }
+        await _supabase.from('loans')
+            .update({'next_payment_date': newNext.toIso8601String().split('T')[0]})
+            .eq('id', loanId);
       }
-      await _supabase.from('loans')
-          .update({'next_payment_date': newNext.toIso8601String().split('T')[0]})
-          .eq('id', loanId);
     }
   }
 
