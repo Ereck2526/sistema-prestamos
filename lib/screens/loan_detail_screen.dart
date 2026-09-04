@@ -118,17 +118,26 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
                       return;
                     }
 
-                    Navigator.pop(dialogContext);
-                    // Capturar messenger antes del async gap
+                    // Capturar messenger y db ANTES de cerrar el dialog.
+                    // Despues de Navigator.pop el context del StatefulBuilder queda
+                    // inactivo y ScaffoldMessenger.of(context) lanzaria una excepcion
+                    // que cancelaria el registerPayment sin ningun aviso visible.
                     final messenger = ScaffoldMessenger.of(context);
+                    final db = context.read<DatabaseService>();
+                    final double principalPaid = double.parse(principalController.text);
+                    final double interestPaid = double.parse(interestController.text);
+                    final String? notes = notesController.text.isNotEmpty ? notesController.text : null;
+                    final DateTime? pDate = paymentDate;
+
+                    Navigator.pop(dialogContext);
+
                     try {
-                      final db = context.read<DatabaseService>();
                       await db.registerPayment(
                         loanId: widget.loan['id'],
-                        principalPaid: double.parse(principalController.text),
-                        interestPaid: double.parse(interestController.text),
-                        notes: notesController.text.isNotEmpty ? notesController.text : null,
-                        paymentDate: paymentDate,
+                        principalPaid: principalPaid,
+                        interestPaid: interestPaid,
+                        notes: notes,
+                        paymentDate: pDate,
                       );
                       _fetchLedger();
                       messenger.showSnackBar(const SnackBar(content: Text('Pago guardado')));
