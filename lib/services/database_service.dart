@@ -69,6 +69,18 @@ class DatabaseService {
   }
 
   Future<void> deleteClient(String id) async {
+    // Bug 5 FIX: Verificar que el cliente no tenga prestamos antes de eliminar.
+    // Sin esta validacion, Supabase lanza un error FK ininteligible para el usuario.
+    final loans = await _supabase
+        .from('loans')
+        .select('id')
+        .eq('client_id', id);
+    if (loans.isNotEmpty) {
+      throw Exception(
+        'No se puede eliminar al cliente porque tiene ${loans.length} '
+        'préstamo(s) registrado(s). Elimina primero todos sus préstamos.',
+      );
+    }
     await _supabase.from('clients').delete().eq('id', id);
   }
 
@@ -261,13 +273,27 @@ class DatabaseService {
 
     double originalPrincipal = (loan['original_principal'] ?? 0).toDouble();
     double interestRate = (loan['interest_rate'] ?? 0).toDouble();
-    double expectedInterest = (originalPrincipal * interestRate) / 100.0;
+    // expectedInterest se calcula mas abajo, despues de conocer el capital restante
 
     final allPayments = await _supabase
         .from('payments')
-        .select('interest_paid, notes')
+        .select('interest_paid, principal_paid, notes')
         .eq('loan_id', loanId)
-        .order('created_at', ascending: false);
+        // Bug 9 FIX: Ordenar por payment_date (fecha real del pago) en vez de
+        // created_at (momento de insercion en BD). Esto garantiza coherencia con
+        // el historial visible y evita que pagos backdated se acumulen en orden incorrecto.
+        .order('payment_date', ascending: false);
+
+    // Calcular capital restante ANTES de este pago sumando todo el principal abonado previamente.
+    // El interes esperado de cada periodo se basa en el capital pendiente, no en el original.
+    // Ejemplo: prestamo de 1500, cliente abono 1000 de capital -> restante = 500,
+    // interes esperado = 500 * tasa% (no 1500 * tasa%).
+    double totalPreviousPrincipalPaid = 0;
+    for (var p in allPayments) {
+      totalPreviousPrincipalPaid += (p['principal_paid'] ?? 0).toDouble();
+    }
+    final double remainingPrincipal = originalPrincipal - totalPreviousPrincipalPaid;
+    final double expectedInterest = (remainingPrincipal * interestRate) / 100.0;
 
     // FIX #3: El break debe ocurrir ANTES de sumar el interes del pago que ya cerro un periodo.
     // Iteramos del mas reciente al mas antiguo y acumulamos solo los adelantos del periodo actual.

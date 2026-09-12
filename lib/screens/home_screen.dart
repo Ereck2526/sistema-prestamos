@@ -153,10 +153,17 @@ class _HomeScreenState extends State<HomeScreen> {
     final principalCtrl = TextEditingController(text: loan['original_principal'].toString());
     final interestCtrl = TextEditingController(text: loan['interest_rate'].toString());
     
-    DateTime startDate = loan['created_at'] != null ? DateTime.parse(loan['created_at']) : DateTime.now();
+    DateTime startDate = loan['created_at'] != null 
+        ? () { final dt = DateTime.parse(loan['created_at']).toLocal(); return DateTime(dt.year, dt.month, dt.day); }()
+        : DateTime.now();
     DateTime nextDate = loan['next_payment_date'] != null ? DateTime.parse(loan['next_payment_date']) : DateTime.now();
     String selectedFrequency = loan['payment_frequency'] ?? 'Mensual';
     final String originalFrequency = loan['payment_frequency'] ?? 'Mensual';
+    // Bug 4 FIX: Rastrear si el usuario cambio explicitamente las fechas.
+    // Si no las toca, no las enviamos a updateLoan para evitar corromper
+    // el anchorDay de prestamos con created_at en formato antiguo.
+    bool startDateChanged = false;
+    bool nextDateChanged = false;
 
     showDialog(
       context: context,
@@ -225,7 +232,10 @@ class _HomeScreenState extends State<HomeScreen> {
                             lastDate: DateTime(2100),
                           );
                           if (picked != null) {
-                            setStateModal(() => startDate = picked);
+                            setStateModal(() {
+                              startDate = picked;
+                              startDateChanged = true; // marcar como cambiado explicitamente
+                            });
                           }
                         },
                       ),
@@ -242,7 +252,10 @@ class _HomeScreenState extends State<HomeScreen> {
                             lastDate: DateTime(2100),
                           );
                           if (picked != null) {
-                            setStateModal(() => nextDate = picked);
+                            setStateModal(() {
+                              nextDate = picked;
+                              nextDateChanged = true; // marcar como cambiado explicitamente
+                            });
                           }
                         },
                       ),
@@ -255,18 +268,32 @@ class _HomeScreenState extends State<HomeScreen> {
                 ElevatedButton(
                   onPressed: () async {
                     if (!formKey.currentState!.validate()) return;
-                    Navigator.pop(context);
+                    // Bug 1 FIX: Capturar referencias ANTES de cerrar el dialog.
+                    // Despues de Navigator.pop, el context del StatefulBuilder queda
+                    // inactivo y cualquier acceso a el lanza una excepcion silenciosa
+                    // que cancela la operacion sin aviso visible.
                     final scaffoldMessenger = ScaffoldMessenger.of(context);
+                    final db = context.read<DatabaseService>();
+                    final double principalVal = double.parse(principalCtrl.text);
+                    final double interestVal = double.parse(interestCtrl.text);
+                    final bool freqChanged = selectedFrequency != originalFrequency;
+                    final String freqToSave = selectedFrequency;
+                    final DateTime startToSave = startDate;
+                    final DateTime nextToSave = nextDate;
+
+                    Navigator.pop(context);
+
                     try {
-                      final db = context.read<DatabaseService>();
-                      final bool freqChanged = selectedFrequency != originalFrequency;
                       await db.updateLoan(
                         id: loan['id'],
-                        originalPrincipal: double.parse(principalCtrl.text),
-                        interestRate: double.parse(interestCtrl.text),
-                        startDate: startDate,
-                        nextDate: freqChanged ? null : nextDate,
-                        paymentFrequency: freqChanged ? selectedFrequency : null,
+                        originalPrincipal: principalVal,
+                        interestRate: interestVal,
+                        // Bug 4 FIX: Solo pasar startDate si el usuario lo cambio explicitamente.
+                        // Si se pasa siempre, prestamos con created_at en formato antiguo
+                        // podrian tener su anchorDay corrompido al normalizar la fecha.
+                        startDate: startDateChanged ? startToSave : null,
+                        nextDate: freqChanged ? null : (nextDateChanged ? nextToSave : null),
+                        paymentFrequency: freqChanged ? freqToSave : null,
                       );
                       _fetchData();
                     } catch(e) {

@@ -50,8 +50,11 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
 
   void _showRegisterPaymentModal() {
     final principalController = TextEditingController(text: '0');
-    // FIX #5: El interes se calcula siempre sobre el capital ORIGINAL, no el restante
-    double suggestedInterest = _originalPrincipal * (_interestRate / 100);
+    // El interes sugerido se calcula sobre el capital RESTANTE (original - capital ya abonado),
+    // no sobre el original. Esto es correcto para prestamos donde el cliente va amortizando capital.
+    // _remainingPrincipal ya fue calculado correctamente por _fetchLedger() antes de que
+    // este modal pueda abrirse (el boton solo se activa cuando _isLoading = false).
+    double suggestedInterest = _remainingPrincipal * (_interestRate / 100);
     final interestController = TextEditingController(text: suggestedInterest.toStringAsFixed(2));
     final notesController = TextEditingController();
     DateTime paymentDate = DateTime.now();
@@ -114,7 +117,18 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
                       return;
                     }
                     if (p > _remainingPrincipal) {
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('El abono a capital no puede ser mayor a \$${_remainingPrincipal.toStringAsFixed(2)}')));
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('El abono a capital no puede ser mayor a S/. ${_remainingPrincipal.toStringAsFixed(2)}')));
+                      return;
+                    }
+                    // Bug 7 FIX: Advertir si la fecha de pago es en el futuro.
+                    // Esto previene registros accidentales con fechas incorrectas.
+                    final DateTime today = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+                    final DateTime payDay = DateTime(paymentDate.year, paymentDate.month, paymentDate.day);
+                    if (payDay.isAfter(today)) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                        content: Text('⚠️ La fecha de pago es en el futuro. Verifica la fecha antes de guardar.'),
+                        duration: Duration(seconds: 4),
+                      ));
                       return;
                     }
 
@@ -200,9 +214,9 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
                 child: Column(
                   children: [
                     const Text('Saldo Restante a Cobrar', style: TextStyle(fontSize: 16)),
-                    Text('\$${_remainingPrincipal.toStringAsFixed(2)}', style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold, color: Colors.blue)),
+                    Text('S/. ${_remainingPrincipal.toStringAsFixed(2)}', style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold, color: Colors.blue)),
                     const SizedBox(height: 16),
-                    Text('Préstamo Original: \$${_originalPrincipal.toStringAsFixed(2)}'),
+                    Text('Préstamo Original: S/. ${_originalPrincipal.toStringAsFixed(2)}'),
                     Text('Tasa: $_interestRate% ${widget.loan['payment_frequency']}'),
                     const SizedBox(height: 16),
                     SizedBox(
@@ -236,7 +250,7 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
                     String noteText = cleanNotes.isNotEmpty ? ' - $cleanNotes' : '';
                     return ListTile(
                       leading: const CircleAvatar(backgroundColor: Colors.green, child: Icon(Icons.arrow_downward, color: Colors.white)),
-                      title: Text('Abonó Cap: \$${p.principalPaid} | Int: \$${p.interestPaid}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                      title: Text('Abonó Cap: S/. ${p.principalPaid} | Int: S/. ${p.interestPaid}', style: const TextStyle(fontWeight: FontWeight.bold)),
                       subtitle: Text('${p.paymentDate.day}/${p.paymentDate.month}/${p.paymentDate.year}$noteText'),
                       trailing: IconButton(
                         icon: const Icon(Icons.delete_outline, color: Colors.red),
