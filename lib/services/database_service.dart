@@ -192,6 +192,10 @@ class DatabaseService {
       // BUG C FIX: Guardar en UTC explícitamente para evitar que Supabase
       // interprete la fecha local como UTC y desplace el dia ancla en zonas UTC-X
       'created_at': base.toUtc().toIso8601String(),
+      // anchor_day: dia del mes que el cliente debe pagar. Es la fuente de verdad
+      // para calcular fechas futuras con _addOneMonthSafe/_subtractOneMonthSafe.
+      // Separado de created_at para poder actualizarse si el usuario cambia la fecha.
+      'anchor_day': base.day,
       'status': 'active',
     });
   }
@@ -241,6 +245,9 @@ class DatabaseService {
       updates['next_payment_date'] = recalculated.toIso8601String().split('T')[0];
     } else if (nextDate != null) {
       updates['next_payment_date'] = nextDate.toIso8601String().split('T')[0];
+      // Si el usuario cambia manualmente next_payment_date, actualizar anchor_day
+      // para que los pagos futuros avancen al dia correcto (no al original de created_at).
+      updates['anchor_day'] = nextDate.day;
     }
 
     await _supabase.from('loans').update(updates).eq('id', id);
@@ -267,7 +274,7 @@ class DatabaseService {
   }) async {
     final loan = await _supabase
         .from('loans')
-        .select('original_principal, interest_rate, payment_frequency, next_payment_date, created_at')
+        .select('original_principal, interest_rate, payment_frequency, next_payment_date, created_at, anchor_day')
         .eq('id', loanId)
         .single();
 
@@ -351,9 +358,10 @@ class DatabaseService {
       await _supabase.from('loans').update({'status': 'paid'}).eq('id', loanId);
     } else if (periodsToAdvance > 0) {
       String freq = loan['payment_frequency'];
-      // Obtener anchorDay desde created_at para respetar el dia 31
-      final DateTime createdAt = _normalizeDate(DateTime.parse(loan['created_at']));
-      final int anchorDay = createdAt.day;
+      // Usar anchor_day como fuente de verdad para el dia mensual del cobro.
+      // Fallback a created_at.day para prestamos creados antes de esta columna.
+      final int anchorDay = (loan['anchor_day'] as int?) 
+          ?? _normalizeDate(DateTime.parse(loan['created_at'])).day;
 
       // ENFOQUE SIMPLIFICADO: avanzar desde next_payment_date actual por
       // exactamente periodsToAdvance periodos.
@@ -401,7 +409,7 @@ class DatabaseService {
 
     final loan = await _supabase
         .from('loans')
-        .select('original_principal, payment_frequency, next_payment_date, status, created_at')
+        .select('original_principal, payment_frequency, next_payment_date, status, created_at, anchor_day')
         .eq('id', loanId)
         .single();
     double originalPrincipal = (loan['original_principal'] ?? 0).toDouble();
@@ -422,8 +430,10 @@ class DatabaseService {
     if (willBeActive && periodsToRollback > 0) {
       final String? currentNextStr = loan['next_payment_date'];
       final String freq = loan['payment_frequency'];
-      final DateTime createdAt = _normalizeDate(DateTime.parse(loan['created_at']));
-      final int anchorDay = createdAt.day;
+      // Usar anchor_day como fuente de verdad para el dia mensual del cobro.
+      // Fallback a created_at.day para prestamos creados antes de esta columna.
+      final int anchorDay = (loan['anchor_day'] as int?)
+          ?? _normalizeDate(DateTime.parse(loan['created_at'])).day;
 
       if (currentNextStr != null) {
         DateTime oldNext = DateTime.parse(currentNextStr);
